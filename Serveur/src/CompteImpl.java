@@ -30,7 +30,6 @@ public class CompteImpl extends UnicastRemoteObject implements Compte
     private int id;
     private double solde;
     private Connection connexion;
-    private MarshalledObject marshalledObject;
     
     public CompteImpl(double solde, Connection connexion) throws RemoteException
     {

@@ -8,9 +8,8 @@
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.sql.Connection;
-import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.Hashtable;
-import java.util.List;
 import javafx.util.Pair;
 
 /**
@@ -21,7 +20,7 @@ public class CompteFactoryImpl extends UnicastRemoteObject implements CompteFact
 {
     private ConnexionPool connexionPool;
     private Hashtable<Integer, Pair<CompteImpl, Integer>> comptes; //id_compte - <compte - nombre d'utilisateurs>
-    private List<Pair<Connection, Integer>> connexions; //connexion - nombre d'utilisations
+    private Hashtable<Connection, Integer> connexions; //connexion - nombre d'utilisations
     private final int SEUIL = 5;
     
     protected CompteFactoryImpl() throws RemoteException 
@@ -29,58 +28,51 @@ public class CompteFactoryImpl extends UnicastRemoteObject implements CompteFact
         //Initiation
         super();
         this.connexionPool = new ConnexionPool();
-        this.connexions = new ArrayList();
+        this.connexions = new Hashtable();
         this.comptes = new Hashtable();
     }
     
-    private Connection getConnexion()
+    private Connection getConnexion() throws RemoteException
     {
         Connection connexion = null;
-        for(int i=0; i<this.connexions.size(); i++)
+        boolean connexion_ok = false;
+        Enumeration e = this.connexions.keys();
+        while(!connexion_ok && e.hasMoreElements()) 
         {
-            if(this.connexions.get(i).getValue()<SEUIL)
+            connexion = (Connection)e.nextElement();
+            int nb_utilisations = this.connexions.get(connexion);
+            if(nb_utilisations<SEUIL)
             {
                 //Si une connexion peut encore être utilisée
-                connexion = this.connexions.get(i).getKey();
-                this.connexions.set(i, new Pair(connexion, this.connexions.get(i).getValue()+1));
-                i = this.connexions.size();
-                System.out.println("Utilisation d'une connexion existante.");
+                connexion_ok = true;
+                this.connexions.replace(connexion, nb_utilisations+1);
             }
         }
-        if(connexion==null)
+        if(!connexion_ok)
         {
             //S'il n'y a pas de connexion disponible
             connexion = this.connexionPool.getConnexion();
-            this.connexions.add(new Pair(connexion, 1));
-            System.out.println("Utilisation d'une nouvelle connexion.");
+            this.connexions.put(connexion, 1);
         }
+        this.affichageConnexions();
         return connexion;
     }
     
-    private void returnConnexion(Connection connexion)
+    private void returnConnexion(Connection connexion) throws RemoteException
     {
-        int nb_utilisations = 0;
-        for(int i=0; i<this.connexions.size(); i++)
+        int nb_utilisations = this.connexions.get(connexion);
+        if(nb_utilisations<=1)
         {
-            if(this.connexions.get(i).getKey().equals(connexion))
-            {
-                nb_utilisations = this.connexions.get(i).getValue();
-                if(nb_utilisations<=1)
-                {
-                    //La connexion n'est plus utilisée
-                    this.connexionPool.returnConnexion(this.connexions.get(i).getKey());
-                    this.connexions.remove(i);
-                    System.out.println("Retrait d'une connexion.");
-                }
-                else
-                {
-                    //La connexion est encore utilisée
-                    this.connexions.set(i, new Pair(this.connexions.get(i).getKey(), nb_utilisations-1));
-                    System.out.println("Décrémentation de l'utilisation de la connexion.");
-                }
-                i = this.connexions.size();
-            }
+            //La connexion n'est plus utilisée
+            this.connexionPool.returnConnexion(connexion);
+            this.connexions.remove(connexion);
         }
+        else
+        {
+            //La connexion est encore utilisée
+            this.connexions.replace(connexion, nb_utilisations-1);
+        }
+        this.affichageConnexions();
     }
     
     @Override
@@ -95,14 +87,13 @@ public class CompteFactoryImpl extends UnicastRemoteObject implements CompteFact
             if(nb_utilisations>1)
             {
                 this.comptes.replace(id, new Pair(c, nb_utilisations-1));
-                System.out.println("Nombre d'utilisations du compte "+id+" : "+(nb_utilisations-1));
             }
             else
             {
                 this.returnConnexion(c.getConnexion());
                 this.comptes.remove(id);
-                System.out.println("Retrait du compte "+id);
             }
+            this.affichageComptes();
         }
     }
     
@@ -115,15 +106,14 @@ public class CompteFactoryImpl extends UnicastRemoteObject implements CompteFact
         {
             c = new CompteImpl(id, this.getConnexion());
             this.comptes.put(id, new Pair(c, 1));
-            System.out.println("Ajout du compte "+id);
         }
         else
         {
             c = this.comptes.get(id).getKey();
             int nb_utilisations = this.comptes.get(id).getValue();
             this.comptes.replace(id, new Pair(c, nb_utilisations+1));
-            System.out.println("Nombre d'utilisations du compte "+id+" : "+(nb_utilisations+1));
         }
+        this.affichageComptes();
         return c;
     }
 
@@ -132,6 +122,31 @@ public class CompteFactoryImpl extends UnicastRemoteObject implements CompteFact
     {
         Compte c = new CompteImpl(d, this.getConnexion());
         this.comptes.put(c.getId(), new Pair(c, 1));
+        this.affichageComptes();
         return c;
+    }
+    
+    private void affichageComptes() throws RemoteException
+    {
+        Enumeration e = this.comptes.elements(); 
+        System.out.println("**********Liste des comptes et nombre d'utilisations**********"); 
+        while(e.hasMoreElements()) 
+        { 
+            Pair p = (Pair)e.nextElement();
+            System.out.println("Compte "+((Compte)p.getKey()).getId()+", nombre d'utilisations : "+p.getValue()); 
+        }
+        System.out.println("**************************************************************"); 
+    }
+    
+    private void affichageConnexions() throws RemoteException
+    {
+        Enumeration e = this.connexions.keys(); 
+        System.out.println("**********Liste des connexions et nombre d'utilisations**********"); 
+        while(e.hasMoreElements()) 
+        { 
+            Connection c = (Connection)e.nextElement();
+            System.out.println("Connexion "+c.toString()+", nombre d'utilisations : "+this.connexions.get(c)); 
+        }
+        System.out.println("*****************************************************************"); 
     }
 }

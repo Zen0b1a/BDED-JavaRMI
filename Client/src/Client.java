@@ -6,14 +6,11 @@
 
 
 import java.rmi.ConnectException;
-import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.JOptionPane;
 
 /**
  *
@@ -31,31 +28,28 @@ public class Client
         {
             RMIClient rmi = new RMIClient(CompteFactory.class, "CompteFactory");          
             CompteFactory fac = rmi.recherche();
-            Compte c = fac.getCompte(1);
-            System.out.println(c.getSolde());
-            fac.libereCompte(c);
-            /*try
+            List<Compte> liste = new ArrayList();
+            //Récupération de plusieurs comptes
+            for(int i=1; i<=20; i++)
             {
-            Registry registry = LocateRegistry.getRegistry("localhost", 1099);
-            CompteFactory fac = (CompteFactory)registry.lookup("CompteFactory");
-            Compte c = fac.getCompte(1);
-            Compte c1 = fac.getCompte(1);
-            JOptionPane.showConfirmDialog(null, null, null, 1, 1, null);
-            /*System.out.println(c1.getSolde());
-            c.depot(10);
-            System.out.println(c1.getSolde());
-            c.retrait(10);
-            System.out.println(c1.getSolde());
-            List l = c.getArchivage();
-            for(int i=0; i<l.size(); i++)
-            System.out.println(l.get(i));*/
-            /*fac.libereCompte(c);
-            fac.libereCompte(c1);
+                liste.add(fac.getCompte(i));
+                System.out.println("Solde du compte "+liste.get(i-1).getId()+" : "+liste.get((i-1)).getSolde());
             }
-            catch (RemoteException | NotBoundException | SecurityException ex)
+            //Test des méthodes de dépôt, de retrait et d'optention de l'archivage des opérations
+            System.out.println(liste.get(5).getSolde());
+            liste.get(5).depot(15);
+            System.out.println(liste.get(5).getSolde());
+            liste.get(5).retrait(25);
+            System.out.println(liste.get(5).getSolde());
+            List l = liste.get(5).getArchivage();
+            for(int i=0; i<l.size(); i++)
+                System.out.println(l.get(i));
+            //Libération des comptes
+            for(int i=20; i>0; i--)
             {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
-            }*/
+                fac.libereCompte(liste.get((i-1)));
+                liste.remove((i-1));
+            }
         } catch (ConnectException ex)
         {
             Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
